@@ -59,12 +59,12 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define M5_dir_Pin GPIO_PIN_13
 #define M5_dir_GPIO_Port GPIOC
-#define M1_dir_Pin GPIO_PIN_14
-#define M1_dir_GPIO_Port GPIOC
+#define M2_dir_Pin GPIO_PIN_14
+#define M2_dir_GPIO_Port GPIOC
 #define M3_dir_Pin GPIO_PIN_15
 #define M3_dir_GPIO_Port GPIOC
-#define M2_dir_Pin GPIO_PIN_0
-#define M2_dir_GPIO_Port GPIOA
+#define M1_dir_Pin GPIO_PIN_0
+#define M1_dir_GPIO_Port GPIOA
 #define M4_dir_Pin GPIO_PIN_1
 #define M4_dir_GPIO_Port GPIOA
 #define En1_C1_Pin GPIO_PIN_3
@@ -81,6 +81,10 @@ void Error_Handler(void);
 #define En2_C2_EXTI_IRQn EXTI9_5_IRQn
 #define M6_dir_Pin GPIO_PIN_10
 #define M6_dir_GPIO_Port GPIOA
+#define Sh_M2_dir_Pin GPIO_PIN_15
+#define Sh_M2_dir_GPIO_Port GPIOA
+#define Sh_M1_dir_Pin GPIO_PIN_3
+#define Sh_M1_dir_GPIO_Port GPIOB
 #define Servo_Pin_Pin GPIO_PIN_5
 #define Servo_Pin_GPIO_Port GPIOB
 /* USER CODE BEGIN Private defines */

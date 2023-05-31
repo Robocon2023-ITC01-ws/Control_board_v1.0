@@ -36,6 +36,9 @@ float speed = 0;
 
 uint8_t load = 0;
 uint8_t input_degree = 150; // 90
+
+float speed_up;
+uint8_t up_control;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -74,11 +77,26 @@ float V1 = 0; // target speed of motor1
 float V2 = 0; // target speed of motor2
 float pwm_M1 = 0;
 float pwm_M2 = 0;
+float M_shooter1 = 0;
+float M_shooter2 = 0;
 
 ///// reloading
 uint8_t reload_feedback;
 uint8_t reload_control;
 int8_t reload_error;
+
+uint8_t right_feedback;
+uint8_t right_control;
+int8_t right_error;
+
+uint8_t left_feedback;
+uint8_t left_control;
+int8_t left_error;
+
+uint8_t bit1;
+uint8_t bit2;
+uint8_t bit3;
+uint8_t bit4;
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -114,6 +132,12 @@ void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan)
 	}
 	if (RxHeader.DLC == 2 && RxHeader.StdId == 0x444){
 		reload_feedback = RxData[0] >> 0 & 1;
+		bit1 = RxData[0] >> 1 & 1;
+		bit2 = RxData[0] >> 2 & 1;
+		right_feedback = (bit2 << 1 ) + bit1;
+		bit3 = RxData[0] >> 3 & 1;
+		bit4 = RxData[0] >> 4 & 1;
+		left_feedback = (bit4 << 1 ) + bit3;
 
 	}
 	if (RxHeader.DLC == 1 && RxHeader.StdId == 0x450){
@@ -297,6 +321,7 @@ int main(void)
   MX_TIM4_Init();
   MX_CAN_Init();
   MX_TIM3_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start_IT(&htim2);						// TIMER INTERUPT
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);				// M1
@@ -305,6 +330,9 @@ int main(void)
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_4);				// M2
 
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);				// servo
+
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);				// M1
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);				// M2
 	HAL_CAN_Start(&hcan);
 
 	// Activate the notification
@@ -387,32 +415,33 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if (htim->Instance == TIM2){
 		// PID // need to change for using
-		pwm_M1 = PID(&MPID, speed, Motor1_speed, MKp, MKi, MKd, Motor1);
-		pwm_M2 = PID(&MPID, speed, Motor2_speed, MKp, MKi, MKd, Motor2);
+		M_shooter1 = PID(&MPID, speed, Motor1_speed, MKp, MKi, MKd, Motor1);
+		M_shooter2 = PID(&MPID, speed, Motor2_speed, MKp, MKi, MKd, Motor2);
 		// feedback speed
 		Motor1_speed = (float)fabs(Motors_RPS(Motor1, Sample_time, CPR));
 		Motor2_speed = (float)fabs(Motors_RPS(Motor2, Sample_time, CPR));
 
 		// dir
-		HAL_GPIO_WritePin(M1_dir_GPIO_Port, M1_dir_Pin, 1);		// need to config
-		HAL_GPIO_WritePin(M2_dir_GPIO_Port, M2_dir_Pin, 1);
-		HAL_GPIO_WritePin(M3_dir_GPIO_Port, M3_dir_Pin, 0);
+			// need to config
+		HAL_GPIO_WritePin(Sh_M1_dir_GPIO_Port, Sh_M1_dir_Pin, 0);
+		HAL_GPIO_WritePin(Sh_M2_dir_GPIO_Port, Sh_M2_dir_Pin, 0);
+
 		// pwm
-		if (pwm_M1 > 20)	// M1
+		if (M_shooter1 > 20)	// M1
 		{
-			TIM4->CCR2 = pwm_M1;
+			TIM1->CCR2 = M_shooter1;
 		}
 		else
 		{
-			TIM4->CCR2 = 0;
+			TIM1->CCR2 = 0;
 		}
-		if (pwm_M2 > 20)	// M2
+		if (M_shooter2 > 20)	// M2
 		{
-			TIM4->CCR1 = pwm_M2;
+			TIM1->CCR1 = M_shooter2;
 		}
 		else
 		{
-			TIM4->CCR1 = 0;
+			TIM1->CCR1 = 0;
 		}
 		if(load == 1){		// load for shoot // M3
 			TIM4->CCR3 = 500;
@@ -420,10 +449,34 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 		else {
 			TIM4->CCR3 = 0;
 		}
+//
+		if (pwm_M1 > 10){
+			HAL_GPIO_WritePin(M1_dir_GPIO_Port, M1_dir_Pin, 1);
+			TIM4->CCR2 = pwm_M1;
+		}
+		else if (pwm_M1 < -10){
+			HAL_GPIO_WritePin(M1_dir_GPIO_Port, M1_dir_Pin, 0);
+			TIM4->CCR2 = -1 * pwm_M1;
+		}
+		else{
+			HAL_GPIO_WritePin(M1_dir_GPIO_Port, M1_dir_Pin, 0);
+			TIM4->CCR2 = 0;
+		}
+		if (pwm_M2 > 10){
+			HAL_GPIO_WritePin(M2_dir_GPIO_Port, M2_dir_Pin, 1);
+			TIM4->CCR1 = pwm_M2;
+		}
+		else if (pwm_M2 < -10){
+			HAL_GPIO_WritePin(M2_dir_GPIO_Port, M2_dir_Pin, 0);
+			TIM4->CCR1 = -1 * pwm_M2;
+		}
+		else{
+			HAL_GPIO_WritePin(M2_dir_GPIO_Port, M2_dir_Pin, 0);
+			TIM4->CCR1 = 0;
+		}
 
 
-		// reload
-		reload_error = reload_control - reload_feedback;
+
 
 		if(reload_error > 0){	// M4
 
@@ -439,6 +492,52 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
 			HAL_GPIO_WritePin(M4_dir_GPIO_Port, M4_dir_Pin, 0);
 			TIM4->CCR4 = 0;
+		}
+
+		if(right_error > 0){	// M1
+			pwm_M1 = 400;
+		}
+		else if(right_error < 0){
+			pwm_M1 = -400;
+		}
+		else {
+			pwm_M1 = 0;
+		}
+
+		if(left_error > 0){	// M2
+			pwm_M2 = -450;
+		}
+		else if(left_error < 0){
+			pwm_M2 = 450;
+		}
+		else {
+			pwm_M2 = 0;
+		}
+		if (right_error == 0 && left_error == 0){
+			if(up_control == 2){
+				right_control = up_control;
+				left_control = up_control;
+				up_control = 1;
+			}
+
+			if(up_control == 0){
+				right_control = up_control;
+				left_control = up_control;
+			}
+		}
+
+
+		// reload
+		reload_error = reload_control - reload_feedback;
+		right_error = right_control - right_feedback;
+		left_error = left_control - left_feedback;
+
+
+		if(right_control == 2 && right_error == 0){
+			right_control = 1;
+		}
+		if(left_control == 2 && left_error == 0){
+			left_control = 1;
 		}
 
 		if(reload_feedback == 1 && reload_error == 0){
