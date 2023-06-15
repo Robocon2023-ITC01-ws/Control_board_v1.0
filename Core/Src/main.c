@@ -96,6 +96,11 @@ uint8_t left_feedback = 1;
 uint8_t left_control = 1;
 int8_t left_error;
 
+uint8_t shoot_feedback = 0;
+uint8_t shoot_control = 0;
+int8_t shoot_error = 0;
+
+
 uint8_t bit1;
 uint8_t bit2;
 uint8_t bit3;
@@ -107,6 +112,11 @@ uint8_t start;
 uint8_t prepare;
 uint8_t reload;
 uint8_t shoot;
+
+uint8_t right_reset;
+uint8_t left_reset;
+
+uint8_t test = 150;
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -118,10 +128,18 @@ uint8_t TxData[4];
 uint32_t TxMailbox;
 uint8_t cntt;
 
+uint8_t break_loop;
+
 float map(float Input, float Min_Input, float Max_Input, float Min_Output, float Max_Output)
 {
 
 	return (float)((Input - Min_Input) * (Max_Output - Min_Output) / (Max_Input - Min_Input) + Min_Output);
+}
+
+void servo_rotation(uint8_t degree){
+	float y = 0.556 * (float) degree + 25;
+	uint8_t pwm = round(y);
+	TIM3->CCR2 = pwm;
 }
 
 void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan)
@@ -148,12 +166,28 @@ void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan)
 		bit3 = RxData[0] >> 3 & 1;
 		bit4 = RxData[0] >> 4 & 1;
 		left_feedback = (bit4 << 1 ) + bit3;
+
+		shoot_feedback = RxData[0] >> 5 & 1;
+
+		right_reset = RxData[0] >> 6 & 1;
+		left_reset = RxData[0] >> 7 & 1;
+
+		if (right_reset == 1 || left_reset == 1){
+			right_reset = 0;
+			left_reset = 0;
+			// break signal
+
+			break_loop = 1;
+			servo_rotation(150);
+			right_control = 1;
+			left_control = 1;
+		}
 	}
 
 	// working_state
 	if (RxHeader.DLC == 1 && RxHeader.StdId == 0x145){
 		if(RxData[0] == 0){
-			if(right_error == 0 && left_error == 0 && right_feedback == 1 && left_feedback == 1) {
+			if(right_error == 0 && left_error == 0 && left_feedback != 0 && right_feedback != 0) {
 				prepare = 1;
 			}
 		}
@@ -163,18 +197,14 @@ void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan)
 			}
 		}
 		else if(RxData[0] == 2 && shoot_finish == 1){
-			if(shoot_state == 0 && ring_count > 0 && ring_count <= 10){
+			if(shoot_state == 0 ){ // && ring_count > 0 && ring_count <= 10
 				shoot = 1;
 			}
 		}
 	}
 }
 
-void servo_rotation(uint8_t degree){
-	float y = 0.556 * (float) degree + 25;
-	uint8_t pwm = round(y);
-	TIM3->CCR2 = pwm;
-}
+
 
 /* USER CODE END PM */
 
@@ -185,25 +215,101 @@ void servo_rotation(uint8_t degree){
 
 
 void prepare_function(){
-	servo_rotation(150);
-	up_control = 0;
+	ring_count = 0;
+	servo_rotation(160);
+	right_control = 0;
+	left_control = 0;
 	HAL_Delay(10);
-	while (left_error != 0 && right_error != 0 )
+	while (left_error != 0 || right_error != 0 )
 	{
 		/* code */
 	}
 }
 
+//void reload_function(){
+//
+//	if(break_loop){
+//		break_loop = 0;
+//		right_feedback = 1;
+//		left_feedback = 1;
+//	}
+//	else {
+//		reload_control = 1;
+//		HAL_Delay(50);
+//		while(reload_control != 0){
+//			right_control = 0;
+//			left_control = 0;
+//		}
+//
+//		while(reload_error != 0){
+//			right_feedback = 0;
+//			left_feedback = 0;
+//			right_error = 0;
+//			left_error = 0;
+//		}
+//		right_feedback = 0;
+//		left_feedback = 0;
+//		HAL_Delay(200);
+//		right_control = 3;
+//		left_control = 3;
+//		HAL_Delay(10);
+//		if(break_loop){
+//			right_control = 1;
+//			left_control = 1;
+//			servo_rotation(160);
+//		}
+//		else {
+//			while ((left_error != 0 || right_error != 0))
+//			{
+//				if (break_loop){
+//					right_control = 1;
+//					left_control = 1;
+//					break;
+//				}
+//				/* code */
+//			}
+//			if (break_loop == 0){
+//				right_control = 2;
+//				left_control = 2;
+//				HAL_Delay(10);
+//			}
+//
+//			while ((left_error != 0 || right_error != 0 ))
+//			{
+//				/* code */
+//				if (break_loop){
+//					right_control = 1;
+//					left_control = 1;
+//					break;
+//				}
+//			}
+//		}
+//	}
+//
+//}
+//
 
 
 void reload_function(){
-	ring_count++;
-	if(ring_count <= 10){
+
+	if(break_loop){
+		break_loop = 0;
+		right_feedback = 1;
+		left_feedback = 1;
+	}
+	else {
 		reload_control = 1;
-		HAL_Delay(100);
+		HAL_Delay(300);
 		while(reload_control != 0){
-			up_control = 0;
+			right_control = 0;
+			left_control = 0;
 		}
+//		right_control = 0;
+//		left_control = 0;
+//		HAL_Delay(10);
+//		reload_control = 1;
+//		while(reload_control != 0);
+
 
 		while(reload_error != 0){
 			right_feedback = 0;
@@ -213,23 +319,64 @@ void reload_function(){
 		}
 		right_feedback = 0;
 		left_feedback = 0;
-		HAL_Delay(200);
-		up_control = 2;
-	}
-	else{
-		ring_count = 0;
-		up_control = 0;
-		servo_rotation(150);
+		while(reload_feedback != 0){
+			HAL_Delay(10);
+		}
+		right_control = 3;
+		left_control = 3;
+		HAL_Delay(10);
+		if(break_loop){
+			right_control = 1;
+			left_control = 1;
+			servo_rotation(160);
+		}
+		else {
+			while ((left_error != 0 || right_error != 0))
+			{
+				if (break_loop){
+					right_control = 1;
+					left_control = 1;
+					break;
+				}
+				/* code */
+			}
+			if (break_loop == 0){
+				right_control = 2;
+				left_control = 2;
+				HAL_Delay(10);
+			}
+
+			while ((left_error != 0 || right_error != 0 ))
+			{
+				/* code */
+				if (break_loop){
+					right_control = 1;
+					left_control = 1;
+					break;
+				}
+			}
+		}
 	}
 
 }
+
+
 void start_fucntion(){
 	start_finish = 0;
-	servo_rotation(100);
+	servo_rotation(95);
 	HAL_Delay(500);
-	up_control = 2;
+	right_control = 2;
+	left_control = 2;
+
 	HAL_Delay(10);
-	while (left_error != 0 || right_error != 0 );
+	while ((left_error != 0 || right_error != 0 ) ){
+		if (break_loop){
+			right_control = 1;
+			left_control = 1;
+			break;
+		}
+	}
+
 	HAL_Delay(10);
 	reload_function();
 
@@ -241,11 +388,15 @@ void shoot_function(float speed_){
 	speed = speed_;
 	HAL_Delay(1000);
 	shoot_state = 1;
-	HAL_Delay(500);
+	HAL_Delay(700);
 	shoot_state = 0;
-	HAL_Delay(2000);
 	speed = 0;
-	reload_function();
+
+	HAL_Delay(10);
+	while(shoot_error != 0);
+	if (right_feedback != 1 && left_feedback != 1){
+		reload_function();
+	}
 	shoot_finish = 1;
 }
 /* USER CODE END PV */
@@ -419,7 +570,7 @@ int main(void)
 	// Activate the notification
 	HAL_CAN_ActivateNotification(&hcan, CAN_IT_RX_FIFO1_MSG_PENDING);
 
-	servo_rotation(150);
+	servo_rotation(160);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -450,6 +601,12 @@ int main(void)
 		  shoot = 0;
 		  shoot_function(speed);
 	  }
+
+	  if(break_loop == 1 &&(right_feedback == 1 && left_feedback == 1)){
+		  break_loop = 0;
+	  }
+
+//	  servo_rotation(test);
 
   }
   /* USER CODE END 3 */
@@ -541,19 +698,14 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 		{
 			TIM1->CCR1 = 0;
 		}
-		if(shoot_state == 1){		// load for shoot // M3
-			TIM4->CCR3 = 500;
-		}
-		else {
-			TIM4->CCR3 = 0;
-		}
+
 //
 		if (pwm_M1 > 10){
-			HAL_GPIO_WritePin(M1_dir_GPIO_Port, M1_dir_Pin, 1);
+			HAL_GPIO_WritePin(M1_dir_GPIO_Port, M1_dir_Pin, 0);
 			TIM4->CCR2 = pwm_M1;
 		}
 		else if (pwm_M1 < -10){
-			HAL_GPIO_WritePin(M1_dir_GPIO_Port, M1_dir_Pin, 0);
+			HAL_GPIO_WritePin(M1_dir_GPIO_Port, M1_dir_Pin, 1);
 			TIM4->CCR2 = -1 * pwm_M1;
 		}
 		else{
@@ -576,16 +728,37 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
 		// reload
 		reload_error = reload_control - reload_feedback;
+		shoot_error = shoot_control - shoot_feedback;
+
+		if(shoot_state == 1){		// load for shoot // M3
+			shoot_control = 1;
+		}
+		else {
+			shoot_control = 0;
+		}
+
+		if (shoot_error > 0){
+			HAL_GPIO_WritePin(M3_dir_GPIO_Port, M3_dir_Pin, 1);
+			TIM4->CCR3 = 600;
+		}
+		else if(shoot_error < 0){
+			HAL_GPIO_WritePin(M3_dir_GPIO_Port, M3_dir_Pin, 0);
+			TIM4->CCR3 = 600;
+		}
+		else {
+			HAL_GPIO_WritePin(M3_dir_GPIO_Port, M3_dir_Pin, 0);
+			TIM4->CCR3 = 0;
+		}
 
 		if(reload_error > 0){	// M4
 
 			HAL_GPIO_WritePin(M4_dir_GPIO_Port, M4_dir_Pin, 0);		// CW
-			TIM4->CCR4 = 800;
+			TIM4->CCR4 = 1000;
 		}
 		else if(reload_error < 0){
 
 			HAL_GPIO_WritePin(M4_dir_GPIO_Port, M4_dir_Pin, 1);		// CCW
-			TIM4->CCR4 = 600;
+			TIM4->CCR4 = 800;
 		}
 		else {
 			HAL_GPIO_WritePin(M4_dir_GPIO_Port, M4_dir_Pin, 0);
@@ -596,10 +769,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 		//////////////////////////////////////////////////
 
 		if(right_error > 0){	// M1
-			pwm_M1 = 400;
+			pwm_M1 = -520;
 		}
 		else if(right_error < 0){
-			pwm_M1 = -400;
+			pwm_M1 = 520;
 		}
 		else {
 			pwm_M1 = 0;
@@ -614,30 +787,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 		else {
 			pwm_M2 = 0;
 		}
-		if (right_error == 0 && left_error == 0){
-			if(up_control == 2){
-				right_control = up_control;
-				left_control = up_control;
-				up_control = 1;
-			}
-
-			if(up_control == 0){
-				right_control = up_control;
-				left_control = up_control;
-			}
-		}
-
-
 		
 		right_error = right_control - right_feedback;
 		left_error = left_control - left_feedback;
-
-		if(right_control == 2 && right_error == 0){
-			right_control = 1;
-		}
-		if(left_control == 2 && left_error == 0){
-			left_control = 1;
-		}
 
 		if(reload_feedback == 1 && reload_error == 0){
 			reload_control = 0;
